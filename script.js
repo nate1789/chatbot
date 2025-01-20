@@ -1,3 +1,55 @@
+// Initialize global variables
+let knowledgeBase = [];
+const messagesContainer = document.getElementById('chat-messages');
+const userInput = document.getElementById('user-input');
+const sendButton = document.getElementById('send-button');
+const loadingMessage = document.getElementById('loading-message');
+
+// Load the knowledge base
+async function loadKnowledgeBase() {
+    try {
+        loadingMessage.textContent = 'Fetching knowledge base...';
+        
+        // Use absolute path for your repository
+        const response = await fetch('/chatbot/data/ExportedReport.xlsx');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        loadingMessage.textContent = 'Processing data...';
+        const arrayBuffer = await response.arrayBuffer();
+        const data = new Uint8Array(arrayBuffer);
+        
+        const workbook = XLSX.read(data, { type: 'array' });
+        console.log('Sheets available:', workbook.SheetNames);
+        
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        knowledgeBase = XLSX.utils.sheet_to_json(firstSheet);
+        console.log('Entries loaded:', knowledgeBase.length);
+        
+        if (knowledgeBase.length === 0) {
+            throw new Error('No data found in Excel file');
+        }
+        
+        // Enable input once loaded
+        userInput.disabled = false;
+        sendButton.disabled = false;
+        loadingMessage.style.display = 'none';
+        
+        addMessage(`Ready to help! I've loaded ${knowledgeBase.length} answers.`, 'bot');
+        
+    } catch (error) {
+        console.error('Loading error:', error);
+        loadingMessage.innerHTML = `
+            <div style="color: #721c24; background: #f8d7da; padding: 15px; border-radius: 5px; text-align: left;">
+                <strong>Error loading knowledge base</strong><br>
+                ${error.message}<br><br>
+                Please refresh the page to try again. If the problem persists, contact support.
+            </div>
+        `;
+    }
+}
+
 // Enhanced matching algorithm
 function findBestMatch(query) {
     const normalizedQuery = query.toLowerCase().trim();
@@ -72,7 +124,7 @@ function findBestMatch(query) {
     };
 }
 
-// Calculate similarity between two words (Levenshtein distance based)
+// Calculate similarity between two words
 function calculateSimilarity(word1, word2) {
     const longer = word1.length > word2.length ? word1 : word2;
     const shorter = word1.length > word2.length ? word2 : word1;
@@ -106,7 +158,24 @@ function calculateSimilarity(word1, word2) {
     return (longer.length - costs[longer.length - 1]) / longer.length;
 }
 
-// Enhanced response generation
+// Add a message to the chat
+function addMessage(content, role, subject = null) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${role}-message`;
+    messageDiv.textContent = content;
+    
+    if (subject) {
+        const subjectDiv = document.createElement('div');
+        subjectDiv.className = 'subject-tag';
+        subjectDiv.textContent = `Subject: ${subject}`;
+        messageDiv.appendChild(subjectDiv);
+    }
+    
+    messagesContainer.appendChild(messageDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+// Handle sending a message
 function handleSend() {
     const message = userInput.value.trim();
     if (!message) return;
@@ -144,3 +213,14 @@ function handleSend() {
     // Clear input
     userInput.value = '';
 }
+
+// Event listeners
+sendButton.addEventListener('click', handleSend);
+userInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        handleSend();
+    }
+});
+
+// Load knowledge base when page loads
+loadKnowledgeBase();
